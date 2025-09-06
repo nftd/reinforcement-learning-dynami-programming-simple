@@ -1,0 +1,14 @@
+name: rl-dynamic-programming
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.9
+  - numpy
+  - matplotlib
+  - jupyter
+  - pip
+  - pip:
+    - gym
+    - gymnasium
+prefix: /opt/anaconda3/envs/rl-dynamic-programming
