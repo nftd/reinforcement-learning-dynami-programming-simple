@@ -39,38 +39,27 @@ class State:
     def _calculate_R(self):
         R_1 = 0.0
         R_2 = 0.0
-        rental_cars_1 = range(0, STATE_SIZE + 1)
-        arrive_cars_1 = range(0, STATE_SIZE + 1)
-        rental_cars_2 = range(0, STATE_SIZE + 1)
-        arrive_cars_2 = range(0, STATE_SIZE + 1)
+        rental_cars_1 = range(0, 40)
+        arrive_cars_1 = range(0, 40)
+        rental_cars_2 = range(0, 40)
+        arrive_cars_2 = range(0, 40)
         for rental_car_1 in rental_cars_1:
             for arrive_car_1 in arrive_cars_1:
-                state_1 = self.state_1 - rental_car_1 + arrive_car_1
-                if state_1 >= 0:
-                    R_1 += EARNING_PER_CAR * rental_car_1 * poisson.pmf(rental_car_1, POISSON_LAMBDA_RENTAL_CARS_1)
-                elif state_1 < 0:
-                    R_1 += EARNING_PER_CAR * self.state_1 * poisson.pmf(rental_car_1, POISSON_LAMBDA_RENTAL_CARS_1)
+                net_change_1 = self.state_1 - rental_car_1 + arrive_car_1
+                if net_change_1 >= 0:
+                    R_1 += EARNING_PER_CAR * rental_car_1 * poisson.pmf(rental_car_1, POISSON_LAMBDA_RENTAL_CARS_1) * poisson.pmf(arrive_car_1, POISSON_LAMBDA_RETURN_CARS_1)
+                elif net_change_1 < 0:
+                    R_1 += EARNING_PER_CAR * (net_change_1 + rental_car_1) * poisson.pmf(rental_car_1, POISSON_LAMBDA_RENTAL_CARS_1) * poisson.pmf(arrive_car_1, POISSON_LAMBDA_RETURN_CARS_1)
 
         for rental_car_2 in rental_cars_2:
             for arrive_car_2 in arrive_cars_2:
-                state_2 = self.state_2 - rental_car_2 + arrive_car_2
-                if state_2 >= 0:
-                    R_2 += EARNING_PER_CAR * rental_car_2 * poisson.pmf(rental_car_2, POISSON_LAMBDA_RENTAL_CARS_2)
-                elif state_2 < 0:
-                    R_2 += EARNING_PER_CAR * self.state_2 * poisson.pmf(rental_car_2, POISSON_LAMBDA_RENTAL_CARS_2)
+                net_change_2 = self.state_2 - rental_car_2 + arrive_car_2
+                if net_change_2 >= 0:
+                    R_2 += EARNING_PER_CAR * rental_car_2 * poisson.pmf(rental_car_2, POISSON_LAMBDA_RENTAL_CARS_2) * poisson.pmf(arrive_car_2, POISSON_LAMBDA_RETURN_CARS_2)
+                elif net_change_2 < 0:
+                    R_2 += EARNING_PER_CAR * (net_change_2 + rental_car_2) * poisson.pmf(rental_car_2, POISSON_LAMBDA_RENTAL_CARS_2) * poisson.pmf(arrive_car_2, POISSON_LAMBDA_RETURN_CARS_2)
 
         return R_1 + R_2
-
-    # def get_state_according_to_action(self, action: str):
-    #     action = int(action)
-    #     state_i = self.index_i + action
-    #     state_j = self.index_j
-    #     if state_i < 0 or state_i > self.size or state_j < 0 or state_j > self.size:
-    #         return None
-    #     return self.states[f"s_{state_i}_{state_j}"]
-
-
-
 
 
 class StateGrid:
@@ -115,8 +104,28 @@ class StateGrid:
         return R
     
 
+def check_reward_function(state_i: int, state_j: int):
+    rentals_1 = poisson.rvs(POISSON_LAMBDA_RENTAL_CARS_1, size=10000)
+    returns_1 = poisson.rvs(POISSON_LAMBDA_RETURN_CARS_1, size=10000)
+    rentals_2 = poisson.rvs(POISSON_LAMBDA_RENTAL_CARS_2, size=10000)
+    returns_2 = poisson.rvs(POISSON_LAMBDA_RETURN_CARS_2, size=10000)
+
+    rewards = pd.DataFrame({'rentals_1': rentals_1, 'returns_1': returns_1, 'rentals_2': rentals_2, 'returns_2': returns_2})
+    rewards['net_change_1'] = rewards['returns_1'] - rewards['rentals_1'] + state_i
+    rewards['net_change_2'] = rewards['returns_2'] - rewards['rentals_2'] + state_j
+    
+    rewards['reward_1'] = rewards.apply(lambda x: EARNING_PER_CAR * x['rentals_1'] if x['net_change_1'] >= 0 else EARNING_PER_CAR * (x['net_change_1'] + x['rentals_1']), axis=1)
+    rewards['reward_2'] = rewards.apply(lambda x: EARNING_PER_CAR * x['rentals_2'] if x['net_change_2'] >= 0 else EARNING_PER_CAR * (x['net_change_2'] + x['rentals_2']), axis=1)
+    rewards['reward'] = rewards['reward_1'] + rewards['reward_2']
+    return rewards
     
 if __name__ == "__main__":
     state_grid = StateGrid(size=STATE_SIZE)
     print(state_grid.get_V())
     print(state_grid.get_R())
+    rewards_0_0 = check_reward_function(0, 0)
+    rewards_0_20 = check_reward_function(0, 20)
+    rewards_20_20 = check_reward_function(20, 20)
+    print(rewards_0_0['reward'].mean())
+    print(rewards_0_20['reward'].mean())
+    print(rewards_20_20['reward'].mean())
