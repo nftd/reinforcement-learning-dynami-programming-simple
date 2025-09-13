@@ -1,3 +1,4 @@
+from typing import Any
 import pandas as pd
 from scipy.stats import poisson
 
@@ -9,7 +10,8 @@ POISSON_LAMBDA_RETURN_CARS_1: float = 3.0
 POISSON_LAMBDA_RENTAL_CARS_2: float = 4.0
 POISSON_LAMBDA_RETURN_CARS_2: float = 2.0
 EARNING_PER_CAR: float = 10.0
-STATE_SIZE: int = 20
+STATE_SIZE: int = 5
+ACTION_COST: float = 2.0
 
 
 class State:
@@ -60,6 +62,9 @@ class State:
                     R_2 += EARNING_PER_CAR * (net_change_2 + rental_car_2) * poisson.pmf(rental_car_2, POISSON_LAMBDA_RENTAL_CARS_2) * poisson.pmf(arrive_car_2, POISSON_LAMBDA_RETURN_CARS_2)
 
         return R_1 + R_2
+        
+    def __str__(self) -> str:
+        return f"s_{self.state_1}_{self.state_2}: V={self.V}, R={self.R}, PI={self.PI}"
 
 
 class StateGrid:
@@ -103,6 +108,36 @@ class StateGrid:
                 R.loc[i, j] = self.states[f"s_{i}_{j}"].R
         return R
     
+    def update_V_single_state(self, state: State):
+        """+5 is location 1 recieves 5 cars, -5 is location 1 send 5 cars"""
+        cars_location_1, cars_location_2 = state.state_1, state.state_2
+        new_V = 0.0
+        for action in ACTIONS:
+            action_value = int(action)
+            if action_value > 0:
+                if (cars_location_2 >= action_value) and (cars_location_1 + action_value <= STATE_SIZE):
+                    next_state = self.states[f"s_{cars_location_1 + action_value}_{cars_location_2 - action_value}"]
+                    new_V += state.PI[action] * ((next_state.R - ACTION_COST * action_value) + GAMMA * next_state.V)
+                else:
+                    cars_to_transfer = min(cars_location_2, STATE_SIZE - cars_location_1)
+                    next_state = self.states[f"s_{cars_location_1 + cars_to_transfer}_{cars_location_2 - cars_to_transfer}"]
+                    new_V += state.PI[action] * ((next_state.R - ACTION_COST * cars_to_transfer) + GAMMA * next_state.V)
+            elif action_value < 0:
+                if (cars_location_1 >= -action_value) and (cars_location_2 - action_value <= STATE_SIZE):
+                    next_state = self.states[f"s_{cars_location_1 + action_value}_{cars_location_2 - action_value}"]
+                    new_V += state.PI[action] * ((next_state.R - ACTION_COST * -action_value) + GAMMA * next_state.V)
+                else:
+                    cars_to_transfer = min(cars_location_1, STATE_SIZE - cars_location_2)
+                    next_state = self.states[f"s_{cars_location_1 - cars_to_transfer}_{cars_location_2 + cars_to_transfer}"]
+                    new_V += state.PI[action] * ((next_state.R - ACTION_COST * cars_to_transfer) + GAMMA * next_state.V)
+            elif action_value == 0:
+                next_state = self.states[f"s_{cars_location_1}_{cars_location_2}"]
+                new_V += state.PI[action] * ((next_state.R) + GAMMA * next_state.V)
+        state.V = new_V
+
+    def update_V_all_states(self):
+        for state in self.states.values():
+            self.update_V_single_state(state)
 
 def check_reward_function(state_i: int, state_j: int):
     rentals_1 = poisson.rvs(POISSON_LAMBDA_RENTAL_CARS_1, size=10000)
@@ -117,15 +152,23 @@ def check_reward_function(state_i: int, state_j: int):
     rewards['reward_1'] = rewards.apply(lambda x: EARNING_PER_CAR * x['rentals_1'] if x['net_change_1'] >= 0 else EARNING_PER_CAR * (x['net_change_1'] + x['rentals_1']), axis=1)
     rewards['reward_2'] = rewards.apply(lambda x: EARNING_PER_CAR * x['rentals_2'] if x['net_change_2'] >= 0 else EARNING_PER_CAR * (x['net_change_2'] + x['rentals_2']), axis=1)
     rewards['reward'] = rewards['reward_1'] + rewards['reward_2']
-    return rewards
-    
+    return rewards    
 if __name__ == "__main__":
     state_grid = StateGrid(size=STATE_SIZE)
+    # print(state_grid.states['s_0_0'])
+    print("Initial V:")
     print(state_grid.get_V())
+    print("Initial R:")
     print(state_grid.get_R())
-    rewards_0_0 = check_reward_function(0, 0)
-    rewards_0_20 = check_reward_function(0, 20)
-    rewards_20_20 = check_reward_function(20, 20)
-    print(rewards_0_0['reward'].mean())
-    print(rewards_0_20['reward'].mean())
-    print(rewards_20_20['reward'].mean())
+    # print('update V from s_0_0')
+    # state_grid.update_V_single_state(state_grid.states['s_0_0'])
+    # print(state_grid.states['s_0_0'])
+    print('update V from all states')
+    state_grid.update_V_all_states()
+    print(state_grid.get_V())
+    # rewards_0_0 = check_reward_function(0, 0)
+    # rewards_0_20 = check_reward_function(0, 20)
+    # rewards_20_20 = check_reward_function(20, 20)
+    # print(rewards_0_0['reward'].mean())
+    # print(rewards_0_20['reward'].mean())
+    # print(rewards_20_20['reward'].mean())
