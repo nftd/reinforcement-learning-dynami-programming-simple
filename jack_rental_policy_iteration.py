@@ -10,7 +10,7 @@ POISSON_LAMBDA_RETURN_CARS_1: float = 3.0
 POISSON_LAMBDA_RENTAL_CARS_2: float = 4.0
 POISSON_LAMBDA_RETURN_CARS_2: float = 2.0
 EARNING_PER_CAR: float = 10.0
-STATE_SIZE: int = 5
+STATE_SIZE: int = 20
 ACTION_COST: float = 2.0
 
 
@@ -65,6 +65,11 @@ class State:
         
     def __str__(self) -> str:
         return f"s_{self.state_1}_{self.state_2}: V={self.V}, R={self.R}, PI={self.PI}"
+
+    def get_max_PI(self):
+        max_value = max(self.PI.values())
+        return [action for action, value in self.PI.items() if value == max_value]
+
 
 
 class StateGrid:
@@ -139,6 +144,71 @@ class StateGrid:
         for state in self.states.values():
             self.update_V_single_state(state)
 
+    def policy_evaluation(self):
+        while True:
+            DELTA: float = 0.0
+            for state in self.states.values():
+                current_V = state.V
+                self.update_V_single_state(state)
+                DELTA = max(DELTA, abs(state.V - current_V))
+            if DELTA < THETA:
+                break
+
+    def _argmax(self,policy_dict: dict):
+        max_value = max(policy_dict.values())  # Get the maximum value
+        counter = 0
+        for _, value in policy_dict.items():
+            if value == max_value:
+                counter += 1
+        for action, value in policy_dict.items():
+            if value == max_value:
+                policy_dict[action] = 1.0 / counter
+            else:
+                policy_dict[action] = 0.0
+        return policy_dict
+
+    def update_PI_single_state(self, state: State):
+        """+5 is location 1 recieves 5 cars, -5 is location 1 send 5 cars"""
+        actions = state.PI.keys()
+        for action in actions:
+            action_value = int(action)
+            if action_value > 0:
+                if (state.state_2 >= action_value) and (state.state_1 + action_value <= STATE_SIZE):
+                    next_state = self.states[f"s_{state.state_1 + action_value}_{state.state_2 - action_value}"]
+                    state.PI[action] = ((next_state.R - ACTION_COST * action_value) + GAMMA * next_state.V)
+                else:
+                    cars_to_transfer = min(state.state_2, STATE_SIZE - state.state_1)
+                    next_state = self.states[f"s_{state.state_1 + cars_to_transfer}_{state.state_2 - cars_to_transfer}"]
+                    state.PI[action] = ((next_state.R - ACTION_COST * cars_to_transfer) + GAMMA * next_state.V)
+            elif action_value < 0:
+                if (state.state_1 >= -action_value) and (state.state_2 - action_value <= STATE_SIZE):
+                    next_state = self.states[f"s_{state.state_1 + action_value}_{state.state_2 - action_value}"]
+                    state.PI[action] = ((next_state.R - ACTION_COST * -action_value) + GAMMA * next_state.V)
+                else:
+                    cars_to_transfer = min(state.state_1, STATE_SIZE - state.state_2)
+                    next_state = self.states[f"s_{state.state_1 - cars_to_transfer}_{state.state_2 + cars_to_transfer}"]
+                    state.PI[action] = ((next_state.R - ACTION_COST * cars_to_transfer) + GAMMA * next_state.V)
+            elif action_value == 0:
+                next_state = self.states[f"s_{state.state_1}_{state.state_2}"]
+                state.PI[action] = ((next_state.R) + GAMMA * next_state.V)
+        state.PI = self._argmax(state.PI)
+    
+    def policy_improvement(self):
+        policy_stable = True
+        for state in self.states.values():
+            old_action = state.PI.copy()
+            self.update_PI_single_state(state)
+            if old_action != state.PI:
+                policy_stable = False
+        return policy_stable
+    
+    def get_PI(self):
+        pi = pd.DataFrame(index=range(self.size), columns=range(self.size), dtype=object)
+        for i in range(self.size):
+            for j in range(self.size):
+                pi.at[i, j] = self.states[f"s_{i}_{j}"].get_max_PI()
+        return pi
+
 def check_reward_function(state_i: int, state_j: int):
     rentals_1 = poisson.rvs(POISSON_LAMBDA_RENTAL_CARS_1, size=10000)
     returns_1 = poisson.rvs(POISSON_LAMBDA_RETURN_CARS_1, size=10000)
@@ -155,20 +225,19 @@ def check_reward_function(state_i: int, state_j: int):
     return rewards    
 if __name__ == "__main__":
     state_grid = StateGrid(size=STATE_SIZE)
-    # print(state_grid.states['s_0_0'])
     print("Initial V:")
     print(state_grid.get_V())
     print("Initial R:")
     print(state_grid.get_R())
-    # print('update V from s_0_0')
-    # state_grid.update_V_single_state(state_grid.states['s_0_0'])
-    # print(state_grid.states['s_0_0'])
-    print('update V from all states')
-    state_grid.update_V_all_states()
+    policy_stable = False
+    epoch = 0
+    while not policy_stable:
+        state_grid.policy_evaluation()
+        policy_stable = state_grid.policy_improvement()
+        epoch += 1
+        print(f"Epoch: {epoch}")
+    print(f"Policy stable: {policy_stable}")
+    print("Final Policy:")
+    print(state_grid.get_PI())
+    print("Final V:")
     print(state_grid.get_V())
-    # rewards_0_0 = check_reward_function(0, 0)
-    # rewards_0_20 = check_reward_function(0, 20)
-    # rewards_20_20 = check_reward_function(20, 20)
-    # print(rewards_0_0['reward'].mean())
-    # print(rewards_0_20['reward'].mean())
-    # print(rewards_20_20['reward'].mean())
