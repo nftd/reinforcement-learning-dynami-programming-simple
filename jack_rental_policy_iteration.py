@@ -10,7 +10,7 @@ POISSON_LAMBDA_RETURN_CARS_1: float = 3.0
 POISSON_LAMBDA_RENTAL_CARS_2: float = 4.0
 POISSON_LAMBDA_RETURN_CARS_2: float = 2.0
 EARNING_PER_CAR: float = 10.0
-STATE_SIZE: int = 20
+STATE_SIZE: int = 6
 ACTION_COST: float = 2.0
 
 
@@ -24,10 +24,6 @@ class State:
         self.name = name
         self.state_1 = state_1
         self.state_2 = state_2
-        self.state_up = None
-        self.state_down = None
-        self.state_left = None
-        self.state_right = None
         self.V = 0.0
         self.PI = self._init_PI()
         self.R = self._calculate_R()
@@ -83,19 +79,6 @@ class StateGrid:
         for i in range(self.size):
             for j in range(self.size):
                 self.states[f"s_{i}_{j}"] = State(f"s_{i}_{j}", i, j)
-        self._create_connections()
-    
-    def _create_connections(self):
-        for i in range(self.size):
-            for j in range(self.size):
-                if i > 0:
-                    self.states[f"s_{i}_{j}"].state_up = self.states[f"s_{i-1}_{j}"]
-                if i < self.size - 1:
-                    self.states[f"s_{i}_{j}"].state_down = self.states[f"s_{i+1}_{j}"]
-                if j > 0:
-                    self.states[f"s_{i}_{j}"].state_left = self.states[f"s_{i}_{j-1}"]
-                if j < self.size - 1:
-                    self.states[f"s_{i}_{j}"].state_right = self.states[f"s_{i}_{j+1}"]
     
     def get_V(self):
         V = pd.DataFrame(index=range(self.size), columns=range(self.size))
