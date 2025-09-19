@@ -97,7 +97,7 @@ class StateGrid:
             for j in range(self.size):
                 V.loc[i, j] = self.states[f"s_{i}_{j}"].V
         # order index descending
-        # V = V.sort_index(axis=0, ascending=False)
+        V = V.sort_index(axis=0, ascending=False)
         return V
 
     def get_R(self):
@@ -105,6 +105,7 @@ class StateGrid:
         for i in range(self.size):
             for j in range(self.size):
                 R.loc[i, j] = self.states[f"s_{i}_{j}"].R
+        R = R.sort_index(axis=0, ascending=False)
         return R
     
     def update_V_single_state(self, state: State):
@@ -201,6 +202,7 @@ class StateGrid:
         for i in range(self.size):
             for j in range(self.size):
                 pi.at[i, j] = self.states[f"s_{i}_{j}"].get_max_PI()
+        pi = pi.sort_index(axis=0, ascending=False)
         return pi
 
 def check_reward_function(state_i: int, state_j: int):
