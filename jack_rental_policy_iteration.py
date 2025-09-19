@@ -10,7 +10,7 @@ POISSON_LAMBDA_RETURN_CARS_1: float = 3.0
 POISSON_LAMBDA_RENTAL_CARS_2: float = 4.0
 POISSON_LAMBDA_RETURN_CARS_2: float = 2.0
 EARNING_PER_CAR: float = 10.0
-STATE_SIZE: int = 6
+STATE_SIZE: int = 20
 ACTION_COST: float = 2.0
 
 
@@ -29,9 +29,20 @@ class State:
         self.R = self._calculate_R()
     
     def _init_PI(self):
+        """+5 is location 1 recieves 5 cars, -5 is location 1 send 5 cars"""
         PI = {}
         for action in ACTIONS:
-            PI[action] = 1.0 / len(ACTIONS)
+            action = int(action.strip())
+            if action > 0:
+                if ((self.state_2 >= action) and (self.state_1 + action <= STATE_SIZE)):
+                    PI[str(action)] = 0.0
+            elif action < 0:
+                if ((self.state_1 >= -action) and (self.state_2 + -action <= STATE_SIZE)):
+                    PI[str(action)] = 0.0
+            elif action == 0:
+                PI[str(action)] = 0.0
+        for action in PI.keys():
+            PI[action] = 1.0 / len(PI.keys())
         return PI
     
     def _calculate_R(self):
@@ -100,7 +111,7 @@ class StateGrid:
         """+5 is location 1 recieves 5 cars, -5 is location 1 send 5 cars"""
         cars_location_1, cars_location_2 = state.state_1, state.state_2
         new_V = 0.0
-        for action in ACTIONS:
+        for action in state.PI.keys():
             action_value = int(action)
             if action_value > 0:
                 if (cars_location_2 >= action_value) and (cars_location_1 + action_value <= STATE_SIZE):
